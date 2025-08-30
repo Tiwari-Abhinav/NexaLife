@@ -1,3 +1,5 @@
+TEAM NAME- CAZUEL ENGINEERS 
+
 NexaLife: Your Futuristic Health & Time Companion
 NexaLife is a forward-thinking web application prototype designed for a future where personal wellness and time management are seamlessly integrated. Built for a hackathon, this project showcases how AI can provide a holistic overview of one's health and automate daily planning.
 
