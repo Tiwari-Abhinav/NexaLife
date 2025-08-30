@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexaLife - Automated Daily Planner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0a0a1a;
+            color: #e0e0ff;
+        }
+        /* Custom scrollbar for a more futuristic feel */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1a1a3a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4a4a8a;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6a6aff;
+        }
+        .glow-button {
+            background-color: #007bff;
+            box-shadow: 0 0 10px #007bff, 0 0 20px #007bff, 0 0 30px #007bff;
+            transition: all 0.3s ease-in-out;
+        }
+        .glow-button:hover {
+            background-color: #009fff;
+            box-shadow: 0 0 15px #009fff, 0 0 30px #009fff, 0 0 45px #009fff;
+        }
+        .glass-card {
+            background: rgba(26, 26, 58, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 123, 255, 0.2);
+        }
+        #loadingSpinner {
+            border-top-color: #007bff;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <main class="w-full max-w-4xl mx-auto">
+        <div class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-white tracking-wider">NexaLife</h1>
+            <p class="text-lg text-blue-300">Automated Daily Planner</p>
+        </div>
+
+        <div class="glass-card rounded-2xl p-6 md:p-8 space-y-6">
+            <div>
+                <label for="taskInput" class="block text-sm font-medium text-blue-200 mb-2">What's your plan for today?</label>
+                <textarea id="taskInput" rows="5" class="w-full bg-gray-900/50 border border-blue-500/30 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition" placeholder="e.g., 'Morning run for 30 mins, work on project for 4 hours, 1 hour lunch break, team meeting at 3pm for 45 mins, then wrap up with emails'"></textarea>
+            </div>
+            <div class="flex flex-col sm:flex-row items-center gap-4">
+                 <div class="w-full sm:w-1/2">
+                    <label for="startTime" class="block text-sm font-medium text-blue-200 mb-2">Start of your day</label>
+                    <input type="time" id="startTime" value="09:00" class="w-full bg-gray-900/50 border border-blue-500/30 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition appearance-none">
+                </div>
+                <div class="w-full sm:w-1/2">
+                    <label for="endTime" class="block text-sm font-medium text-blue-200 mb-2">End of your day</label>
+                    <input type="time" id="endTime" value="17:00" class="w-full bg-gray-900/50 border border-blue-500/30 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition appearance-none">
+                </div>
+            </div>
+            <div>
+                <label for="apiKeyInput" class="block text-sm font-medium text-blue-200 mb-2">Password</label>
+                <input type="password" id="apiKeyInput" class="w-full bg-gray-900/50 border border-blue-500/30 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition" placeholder="Paste your API key here to run the prototype">
+            </div>
+            <button id="generateBtn" class="w-full glow-button text-white font-bold py-3 px-4 rounded-lg text-lg">
+                Automate My Day
+            </button>
+        </div>
+
+        <div id="loading" class="text-center py-8 hidden">
+            <div id="loadingSpinner" class="animate-spin rounded-full h-12 w-12 border-4 border-blue-500/30 mx-auto"></div>
+            <p class="mt-4 text-blue-200">NexaLife AI is building your schedule...</p>
+        </div>
+        
+        <div id="error" class="text-center py-6 hidden">
+             <div class="bg-red-900/50 border border-red-500/30 text-red-200 px-4 py-3 rounded-lg" role="alert">
+                <strong class="font-bold">Oops!</strong>
+                <span class="block sm:inline" id="errorMessage">Something went wrong. Please try again.</span>
+            </div>
+        </div>
+
+        <div id="scheduleOutput" class="mt-8">
+            <!-- Timetable will be generated here -->
+        </div>
+
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const generateBtn = document.getElementById('generateBtn');
+            const taskInput = document.getElementById('taskInput');
+            const loading = document.getElementById('loading');
+            const scheduleOutput = document.getElementById('scheduleOutput');
+            const errorContainer = document.getElementById('error');
+            const errorMessage = document.getElementById('errorMessage');
+            const apiKeyInput = document.getElementById('apiKeyInput');
+
+            generateBtn.addEventListener('click', handleGenerateSchedule);
+
+            async function handleGenerateSchedule() {
+                const userQuery = taskInput.value.trim();
+                const apiKey = apiKeyInput.value.trim();
+
+                if (!userQuery) {
+                    showError("Please enter your tasks for the day.");
+                    return;
+                }
+                if (!apiKey) {
+                    showError("Please enter your Gemini API Key to run the prototype.");
+                    return;
+                }
+
+                loading.classList.remove('hidden');
+                scheduleOutput.innerHTML = '';
+                errorContainer.classList.add('hidden');
+                
+                try {
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                    const systemPrompt = `You are an intelligent scheduling assistant. Your task is to extract a list of tasks and their estimated durations in minutes from a user's input. The user will provide their tasks in natural language. Structure the output as a JSON array of objects. Each object must have a "task" (string) and "duration" (number in minutes) key. If the user mentions a specific time for a task (e.g., 'meeting at 3pm'), include a "startTime" key with the value in 'HH:mm' 24-hour format. Infer durations logically if not explicitly stated (e.g., 'lunch break' is 60 minutes).`;
+
+                    const payload = {
+                        contents: [{ parts: [{ text: userQuery }] }],
+                        systemInstruction: {
+                            parts: [{ text: systemPrompt }]
+                        },
+                        generationConfig: {
+                            responseMimeType: "application/json",
+                            responseSchema: {
+                                type: "ARRAY",
+                                items: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        "task": { "type": "STRING" },
+                                        "duration": { "type": "NUMBER", "description": "Duration in minutes" },
+                                        "startTime": { "type": "STRING", "description": "Optional start time in HH:mm format" }
+                                    },
+                                    required: ["task", "duration"]
+                                }
+                            }
+                        }
+                    };
+
+                    const response = await fetchWithExponentialBackoff(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`API call failed with status: ${response.status}`);
+                    }
+                    
+                    const result = await response.json();
+                    
+                    if (!result.candidates || result.candidates.length === 0) {
+                        let detailedError = "The AI did not return a valid response.";
+                        if (result.promptFeedback && result.promptFeedback.blockReason) {
+                            detailedError += ` Reason: ${result.promptFeedback.blockReason}. Please try rephrasing your request.`;
+                        }
+                        console.error("Full API Response:", result);
+                        throw new Error(detailedError);
+                    }
+
+                    const candidate = result.candidates[0];
+
+                    if (candidate.content && candidate.content.parts && candidate.content.parts[0] && candidate.content.parts[0].text) {
+                        try {
+                            const taskList = JSON.parse(candidate.content.parts[0].text);
+                            createTimetable(taskList);
+                        } catch (parseError) {
+                            console.error("JSON Parsing Error:", parseError);
+                            console.error("Raw text from AI:", candidate.content.parts[0].text);
+                            throw new Error("The AI returned a schedule in an unexpected format.");
+                        }
+                    } else {
+                        console.error("Unexpected response structure. Full candidate:", candidate);
+                        throw new Error("Could not extract tasks from the AI's response structure.");
+                    }
+
+                } catch (err) {
+                    console.error('Error:', err);
+                    showError(err.message || "An unknown error occurred. Please check the console.");
+                } finally {
+                    loading.classList.add('hidden');
+                }
+            }
+            
+            async function fetchWithExponentialBackoff(url, options, maxRetries = 3, initialDelay = 1000) {
+                let delay = initialDelay;
+                for (let i = 0; i < maxRetries; i++) {
+                    try {
+                        const response = await fetch(url, options);
+                        if (response.status !== 429) { // Not a rate-limiting error
+                            return response;
+                        }
+                        // It's a rate-limiting error, wait and retry
+                    } catch (error) {
+                         if (i === maxRetries - 1) throw error; // Rethrow last error
+                    }
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2; // Double the delay for the next retry
+                }
+                 throw new Error("Max retries reached");
+            }
+
+            function createTimetable(tasks) {
+                const dayStartInput = document.getElementById('startTime').value;
+                const dayEndInput = document.getElementById('endTime').value;
+                
+                let currentTime = timeToMinutes(dayStartInput);
+                const dayEndMinutes = timeToMinutes(dayEndInput);
+
+                const schedule = [];
+                const unassignedTasks = [...tasks.filter(t => !t.startTime)];
+                const fixedTasks = tasks.filter(t => t.startTime).sort((a,b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+
+                // First, place fixed-time tasks
+                fixedTasks.forEach(task => {
+                    const taskStart = timeToMinutes(task.startTime);
+                    // Add free time block if needed
+                    if (taskStart > currentTime) {
+                        schedule.push({
+                            start: currentTime,
+                            end: taskStart,
+                            task: 'Free Time / Break',
+                            isBreak: true
+                        });
+                    }
+                    const taskEnd = taskStart + task.duration;
+                    schedule.push({
+                        start: taskStart,
+                        end: taskEnd,
+                        task: task.task,
+                        isBreak: false
+                    });
+                    currentTime = Math.max(currentTime, taskEnd);
+                });
+                
+                // Then, slot in the flexible tasks
+                unassignedTasks.forEach(task => {
+                    if (currentTime + task.duration <= dayEndMinutes) {
+                        const taskEnd = currentTime + task.duration;
+                        schedule.push({
+                            start: currentTime,
+                            end: taskEnd,
+                            task: task.task,
+                            isBreak: false
+                        });
+                        currentTime = taskEnd;
+                    }
+                });
+
+                // Add final free time block if there's space at the end
+                if (currentTime < dayEndMinutes) {
+                     schedule.push({
+                        start: currentTime,
+                        end: dayEndMinutes,
+                        task: 'Free Time / Wind Down',
+                        isBreak: true
+                    });
+                }
+                
+                displaySchedule(schedule);
+            }
+            
+            function displaySchedule(schedule) {
+                 schedule.forEach(item => {
+                    const duration = item.end - item.start;
+                    if (duration <= 0) return; // Don't display zero-duration items
+
+                    const card = document.createElement('div');
+                    card.className = `glass-card rounded-lg p-4 mb-3 flex items-center justify-between transition-transform transform hover:scale-105 ${item.isBreak ? 'opacity-70' : ''}`;
+
+                    const timeInfo = document.createElement('div');
+                    timeInfo.className = 'font-mono text-blue-300 text-sm';
+                    timeInfo.textContent = `${minutesToTime(item.start)} - ${minutesToTime(item.end)}`;
+
+                    const taskInfo = document.createElement('div');
+                    taskInfo.className = 'text-right';
+                    const taskName = document.createElement('p');
+                    taskName.className = 'font-semibold text-white';
+                    taskName.textContent = item.task;
+                    const taskDuration = document.createElement('p');
+                    taskDuration.className = 'text-xs text-gray-400';
+                    taskDuration.textContent = `${duration} min`;
+                    
+                    taskInfo.appendChild(taskName);
+                    taskInfo.appendChild(taskDuration);
+                    
+                    card.appendChild(timeInfo);
+                    card.appendChild(taskInfo);
+
+                    scheduleOutput.appendChild(card);
+                });
+            }
+
+            function timeToMinutes(time) { // "HH:MM"
+                const [hours, minutes] = time.split(':').map(Number);
+                return hours * 60 + minutes;
+            }
+
+            function minutesToTime(minutes) {
+                const h = Math.floor(minutes / 60);
+                const m = minutes % 60;
+                const hours = String(h).padStart(2, '0');
+                const mins = String(m).padStart(2, '0');
+                // Convert to AM/PM format for display
+                const ampm = h >= 12 ? 'PM' : 'AM';
+                const displayHours = h % 12 || 12; // convert 0 to 12
+                return `${String(displayHours).padStart(2, '0')}:${mins} ${ampm}`;
+            }
+            
+            function showError(message) {
+                errorMessage.textContent = message;
+                errorContainer.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
+
+
+
